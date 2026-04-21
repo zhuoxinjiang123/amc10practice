@@ -206,20 +206,29 @@ def practice():
 @app.route("/answer", methods=["POST"])
 def answer():
     """Record an answer (or skip) and move to next problem."""
-    choice = request.form.get("choice", "")  # A-E or "skip"
+    raw_choice = (request.form.get("choice", "") or "").strip().upper()
     time_spent = int(request.form.get("time_spent", 0))
 
     queue = session.get("queue", [])
     pos = session.get("pos", 0)
+    if raw_choice == "SKIP":
+        choice = "skip"
+    elif raw_choice in ANSWER_CHOICES:
+        choice = raw_choice
+    else:
+        return redirect(url_for("practice", step=pos + 1))
 
     if pos < len(queue):
         pid = queue[pos]
+        problem = PROB_BY_ID.get(pid, {})
+        correct_answer = problem.get("correct_answer", "")
+        is_skip = choice == "skip"
         history = session.get("history", [])
         history.append({
             "id": pid,
-            "answer": choice if choice != "skip" else None,
-            "correct": None,  # we don't have answer keys yet
-            "skipped": choice == "skip",
+            "answer": choice if not is_skip else None,
+            "correct": None if is_skip else choice == correct_answer,
+            "skipped": is_skip,
             "time": time_spent,
         })
         session["history"] = history
