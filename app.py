@@ -31,6 +31,24 @@ def load_problems():
 
 PROBLEMS = load_problems()
 
+
+def load_answer_keys(path=None):
+    """Load answer keys from CSV and normalize identifiers/answers."""
+    if path is None:
+        path = DATA_DIR / "amc10_answers.csv"
+    path = Path(path)
+    if not path.exists():
+        return {}
+
+    keys = {}
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            problem_id = (row.get("problem_id") or row.get("id") or "").strip()
+            answer = (row.get("answer") or row.get("correct") or "").strip().upper()
+            if problem_id and answer:
+                keys[problem_id] = answer
+    return keys
+
 # Build lookup: problem_id -> problem dict
 PROB_BY_ID = {p["problem_id"]: p for p in PROBLEMS}
 
