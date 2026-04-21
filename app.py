@@ -63,6 +63,48 @@ def attach_answer_keys(problems, keys):
     return enriched
 
 
+def normalize_topic(problem):
+    """Return a stable topic label for a problem record."""
+    if isinstance(problem, dict):
+        raw_topic = problem.get("category") or problem.get("topic") or ""
+    else:
+        raw_topic = problem or ""
+    topic = str(raw_topic).strip()
+    return topic or "Uncategorized"
+
+
+def build_topic_progress(queue, history, problems_by_id):
+    """Aggregate queue-scoped progress by topic from the active session."""
+    progress = {}
+    topic_by_problem_id = {}
+
+    for problem_id in queue:
+        topic = normalize_topic(problems_by_id.get(problem_id, {}))
+        topic_by_problem_id[problem_id] = topic
+        if topic not in progress:
+            progress[topic] = {
+                "topic": topic,
+                "total": 0,
+                "finished": 0,
+                "answered": 0,
+                "correct": 0,
+            }
+        progress[topic]["total"] += 1
+
+    for item in history:
+        topic = topic_by_problem_id.get(item.get("id"))
+        if not topic:
+            continue
+        bucket = progress[topic]
+        bucket["finished"] += 1
+        if not item.get("skipped"):
+            bucket["answered"] += 1
+        if item.get("correct") is True:
+            bucket["correct"] += 1
+
+    return progress
+
+
 ANSWER_KEYS = load_answer_keys()
 PROBLEMS = attach_answer_keys(RAW_PROBLEMS, ANSWER_KEYS)
 
