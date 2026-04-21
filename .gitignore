@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 rendered_practice.js
+.worktrees/
