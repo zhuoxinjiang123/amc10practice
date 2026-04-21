@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card results-card">
+  <h1>Session Complete!</h1>
+
+  <div class="stats-row">
+    <div class="stat">
+      <span class="stat-num">{{ answered }}</span>
+      <span class="stat-label">Answered</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ skipped }}</span>
+      <span class="stat-label">Skipped</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ total }}</span>
+      <span class="stat-label">Total</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ (total_time // 60) }}:{{ '%02d' % (total_time % 60) }}</span>
+      <span class="stat-label">Total Time</span>
+    </div>
+  </div>
+
+  <h2>Problem Review</h2>
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Contest</th>
+        <th>Problem</th>
+        <th>Your Answer</th>
+        <th>Time</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in detail %}
+      <tr class="{% if d.skipped %}row-skipped{% endif %}">
+        <td>{{ loop.index }}</td>
+        <td>{{ d.contest }}</td>
+        <td>{{ d.num }}</td>
+        <td>
+          {% if d.skipped %}
+            <span class="badge badge-skip">skipped</span>
+          {% else %}
+            <span class="badge badge-answer">{{ d.answer }}</span>
+          {% endif %}
+        </td>
+        <td>{{ (d.time // 60) }}:{{ '%02d' % (d.time % 60) }}</td>
+        <td>
+          <a href="{{ d.url }}" target="_blank">Problem</a>
+          &middot;
+          <a href="{{ d.solution_url }}" target="_blank">Solution</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="results-actions">
+    <a href="{{ url_for('index') }}" class="btn btn-primary">Practice Again</a>
+  </div>
+</div>
+{% endblock %}

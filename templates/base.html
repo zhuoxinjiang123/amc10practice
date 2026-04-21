@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMC 10 Practice</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <div class="container header-bar">
+      <a href="{{ url_for('index') }}" class="logo">AMC 10 Practice</a>
+      <div class="header-controls">
+        {% block header_right %}{% endblock %}
+        <button type="button" id="theme-toggle" class="btn btn-small btn-theme" title="Toggle dark mode">
+          <span class="icon-light">&#9790;</span>
+          <span class="icon-dark">&#9788;</span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    // Dark mode toggle
+    (function() {
+      const html = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const saved = localStorage.getItem('theme');
+      if (saved) html.setAttribute('data-theme', saved);
+      else if (window.matchMedia('(prefers-color-scheme: dark)').matches)
+        html.setAttribute('data-theme', 'dark');
+
+      btn.addEventListener('click', () => {
+        const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+      });
+    })();
+  </script>
+</body>
+</html>

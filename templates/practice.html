@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block header_right %}
+<div class="progress-info">
+  <span id="timer" class="timer">0:00</span>
+  &nbsp;&middot;&nbsp;
+  Problem {{ pos }} / {{ total }}
+  &nbsp;&middot;&nbsp;
+  Answered: {{ attempted }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="practice-layout">
+  <!-- Problem info bar -->
+  <div class="problem-bar">
+    <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
+      {% if problem.category and problem.category != 'Uncategorized' %}
+        <span class="problem-cat-badge">{{ problem.category }}</span>
+      {% endif %}
+    </span>
+    <div class="problem-bar-actions">
+      <button type="button" id="ai-toggle" class="btn btn-small btn-ai" title="Ask AI for a hint">
+        AI Hint
+      </button>
+      <a href="{{ problem.problem_url }}" target="_blank" class="btn btn-small btn-outline">
+        Open on AoPS &nearr;
+      </a>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar-track">
+    <div class="progress-bar-fill" style="width: {{ (pos / total * 100)|int }}%"></div>
+  </div>
+
+  <!-- Embedded problem page -->
+  <div class="problem-frame-wrap">
+    <iframe
+      src="{{ problem.problem_url }}"
+      class="problem-frame"
+      sandbox="allow-same-origin allow-scripts"
+      loading="lazy"
+    ></iframe>
+    <div class="frame-fallback">
+      Can't see the problem?
+      <a href="{{ problem.problem_url }}" target="_blank">Open it directly on AoPS</a>
+    </div>
+  </div>
+
+  <!-- AI Chat Panel (hidden by default) -->
+  <div id="ai-panel" class="ai-panel" style="display:none;">
+    <div class="ai-panel-header">
+      <span>AI Tutor</span>
+      <button type="button" id="ai-close" class="ai-close">&times;</button>
+    </div>
+    <div id="ai-messages" class="ai-messages">
+      <div class="ai-msg ai-msg-bot">Hi! Need a hint? Ask me anything about this problem. I won't spoil the answer.</div>
+    </div>
+    <div class="ai-input-row">
+      <input type="text" id="ai-input" class="ai-input" placeholder="Ask for a hint..." autocomplete="off">
+      <button type="button" id="ai-send" class="btn btn-primary btn-small">Send</button>
+    </div>
+  </div>
+
+  <!-- Answer section -->
+  <div class="answer-section">
+    <form id="answer-form" action="{{ url_for('answer') }}" method="post">
+      <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
+      <input type="hidden" id="time_spent" name="time_spent" value="0">
+      <p class="answer-prompt">Your answer:</p>
+      <div class="answer-buttons">
+        {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
+        <a
+          href="{{ url_for('practice', selected=letter, step=pos) }}"
+          class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
+        >{{ letter }}</a>
+        {% endfor %}
+      </div>
+      <div class="submit-row" id="submit-row"{% if not selected_choice %} style="display:none;"{% endif %}>
+        <span id="selected-label" class="selected-label" aria-live="polite">Selected: {{ selected_choice or 'none' }}</span>
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+          Submit &rarr;
+        </button>
+        <button type="submit" class="btn btn-skip" id="skip-btn" form="skip-form">
+          Skip
+        </button>
+      </div>
+    </form>
+    <form id="skip-form" action="{{ url_for('answer') }}" method="post">
+      <input type="hidden" name="choice" value="skip">
+      <input type="hidden" id="skip-time-spent" name="time_spent" value="0">
+    </form>
+
+    <div class="solution-reveal">
+      <details>
+        <summary>Show solution link</summary>
+        <a href="{{ solution_url }}" target="_blank">View solution on AoPS &nearr;</a>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const answerForm = document.getElementById('answer-form');
+    if (!answerForm) return;
+    answerForm.addEventListener('submit', (event) => {
+      const choiceInput = document.getElementById('choice-input');
+      if (!choiceInput || !choiceInput.value) {
+        event.preventDefault();
+      }
+    });
+  })();
+
+  // Timer
+  (function() {
+    const timerEl = document.getElementById('timer');
+    const timeInput = document.getElementById('time_spent');
+    const skipTimeInput = document.getElementById('skip-time-spent');
+    const skipForm = document.getElementById('skip-form');
+    const timerMode = '{{ timer_mode }}';
+    const countdownTotal = {{ countdown_seconds }};
+    const currentPos = {{ pos }};
+
+    const problemKey = 'amc10_problem_start';
+    const posKey = 'amc10_pos';
+    const sessionStartKey = 'amc10_session_start';
+
+    let problemStart;
+    const storedPos = sessionStorage.getItem(posKey);
+    if (storedPos !== String(currentPos)) {
+      problemStart = Date.now();
+      sessionStorage.setItem(problemKey, problemStart);
+      sessionStorage.setItem(posKey, currentPos);
+      if (currentPos === 1) {
+        sessionStorage.setItem(sessionStartKey, Date.now());
+      }
+    } else {
+      problemStart = parseInt(sessionStorage.getItem(problemKey)) || Date.now();
+    }
+
+    const sessionStart = parseInt(sessionStorage.getItem(sessionStartKey)) || Date.now();
+    let expired = false;
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    function update() {
+      const now = Date.now();
+      const problemElapsed = Math.floor((now - problemStart) / 1000);
+      timeInput.value = problemElapsed;
+      if (skipTimeInput) skipTimeInput.value = problemElapsed;
+
+      if (timerMode === 'countdown') {
+        const sessionElapsed = Math.floor((now - sessionStart) / 1000);
+        const remaining = countdownTotal - sessionElapsed;
+        if (remaining <= 0) {
+          timerEl.textContent = '0:00';
+          timerEl.classList.add('timer-expired');
+          if (!expired) {
+            expired = true;
+            if (skipForm) skipForm.submit();
+          }
+          return;
+        }
+        timerEl.textContent = formatTime(remaining);
+        if (remaining <= 60) timerEl.classList.add('timer-warning');
+      } else {
+        timerEl.textContent = formatTime(problemElapsed);
+      }
+      requestAnimationFrame(update);
+    }
+    update();
+  })();
+
+  // AI Chat
+  (function() {
+    const panel = document.getElementById('ai-panel');
+    const toggle = document.getElementById('ai-toggle');
+    const closeBtn = document.getElementById('ai-close');
+    const input = document.getElementById('ai-input');
+    const sendBtn = document.getElementById('ai-send');
+    const messages = document.getElementById('ai-messages');
+
+    const problemLabel = '{{ problem.contest_label }} Problem {{ problem.problem_num }}';
+    const problemUrl = '{{ problem.problem_url }}';
+
+    toggle.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      if (panel.style.display !== 'none') input.focus();
+    });
+    closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+
+    function addMsg(text, role) {
+      const div = document.createElement('div');
+      div.className = 'ai-msg ai-msg-' + role;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function send() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      addMsg(msg, 'user');
+      input.value = '';
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch('/ai/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            message: msg,
+            problem_label: problemLabel,
+            problem_url: problemUrl,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          addMsg('Error: ' + data.error, 'bot');
+        } else {
+          addMsg(data.reply, 'bot');
+        }
+      } catch (e) {
+        addMsg('Failed to reach AI. Check your connection.', 'bot');
+      }
+      sendBtn.disabled = false;
+      input.focus();
+    }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); send(); }
+    });
+  })();
+</script>
+{% endblock %}
