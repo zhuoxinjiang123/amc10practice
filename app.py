@@ -18,6 +18,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 CATEGORY_LIST = ["Algebra", "Geometry", "Counting & Probability", "Number Theory"]
+ANSWER_CHOICES = {"A", "B", "C", "D", "E"}
 
 
 def load_problems():
@@ -28,8 +29,7 @@ def load_problems():
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
 
-
-PROBLEMS = load_problems()
+RAW_PROBLEMS = load_problems()
 
 
 def load_answer_keys(path=None):
@@ -38,16 +38,33 @@ def load_answer_keys(path=None):
         path = DATA_DIR / "amc10_answers.csv"
     path = Path(path)
     if not path.exists():
-        return {}
+        raise FileNotFoundError(f"Answer key file not found: {path}")
 
     keys = {}
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             problem_id = (row.get("problem_id") or row.get("id") or "").strip()
             answer = (row.get("answer") or row.get("correct") or "").strip().upper()
-            if problem_id and answer:
-                keys[problem_id] = answer
+            if not problem_id or answer not in ANSWER_CHOICES:
+                raise ValueError(f"Invalid answer key row: {row}")
+            if problem_id in keys:
+                raise ValueError(f"Duplicate answer key for problem_id {problem_id}")
+            keys[problem_id] = answer
     return keys
+
+
+def attach_answer_keys(problems, keys):
+    """Return copied problem records with the matching correct answer attached."""
+    enriched = []
+    for problem in problems:
+        enriched_problem = dict(problem)
+        enriched_problem["correct_answer"] = keys.get(problem["problem_id"], "")
+        enriched.append(enriched_problem)
+    return enriched
+
+
+ANSWER_KEYS = load_answer_keys()
+PROBLEMS = attach_answer_keys(RAW_PROBLEMS, ANSWER_KEYS)
 
 # Build lookup: problem_id -> problem dict
 PROB_BY_ID = {p["problem_id"]: p for p in PROBLEMS}
