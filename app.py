@@ -7,10 +7,13 @@ pick an answer (A-E), tracks session score, and links to solutions.
 
 import csv
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from flask import Flask, abort, render_template, session, redirect, url_for, request, jsonify, make_response
+import requests
 
 app = Flask(__name__)
 app.secret_key = "amc10-practice-key-change-me"
@@ -31,6 +34,7 @@ DIFFICULTY_LABELS = {
     "medium": "Medium",
     "hard": "Hard",
 }
+USER_AGENT = "amc10-practice/0.1 (educational use)"
 
 
 def load_local_env(path=None):
@@ -152,6 +156,69 @@ def load_problems():
         return list(csv.DictReader(f))
 
 RAW_PROBLEMS = load_problems()
+
+
+def fetch_text(url):
+    try:
+        response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+        if response.status_code == 200:
+            return response.text
+    except Exception:
+        return None
+    return None
+
+
+def strip_problem_html(html_fragment):
+    text = re.sub(r'<img[^>]*alt="([^"]*)"[^>]*>', r" \1 ", html_fragment)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+@lru_cache(maxsize=128)
+def scrape_contest_problem_texts(contest_url):
+    html = fetch_text(contest_url)
+    if not html:
+        return {}
+
+    problems = {}
+    matches = list(re.finditer(r'id="Problem_(\d+)"', html))
+    for index, match in enumerate(matches):
+        problem_num = int(match.group(1))
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(html)
+        chunk = html[start:end]
+
+        solution_match = re.search(r'id="Solution', chunk)
+        if solution_match:
+            chunk = chunk[:solution_match.start()]
+        see_also_match = re.search(r'id="See_Also', chunk)
+        if see_also_match:
+            chunk = chunk[:see_also_match.start()]
+
+        text = strip_problem_html(chunk)
+        text = re.sub(r"^Problem\s+\d+\s*", "", text).strip()
+        if text:
+            problems[problem_num] = text
+
+    return problems
+
+
+def get_problem_text(problem_id):
+    problem = PROB_BY_ID.get(str(problem_id))
+    if not problem:
+        return ""
+
+    contest_url = (problem.get("contest_url") or "").strip()
+    if not contest_url:
+        return ""
+
+    try:
+        problem_num = int(problem.get("problem_num") or 0)
+    except ValueError:
+        return ""
+
+    return scrape_contest_problem_texts(contest_url).get(problem_num, "")
 
 
 def load_answer_keys(path=None):
@@ -589,11 +656,17 @@ def ai_chat():
     problem_url = data.get("problem_url", "")
     problem_id = str(data.get("problem_id") or session.get("active_problem_id") or "").strip()
     tutor_mode = normalize_ai_tutor_mode(data.get("tutor_mode"))
+    problem_text = get_problem_text(problem_id)
 
     if not user_msg:
         return jsonify({"error": "Empty message"}), 400
 
-    context = f"The student is working on: {problem_label}.\nProblem URL: {problem_url}\n"
+    problem_text_line = problem_text or "unavailable"
+    context = (
+        f"The student is working on: {problem_label}.\n"
+        f"Problem URL: {problem_url}\n"
+        f"Exact problem text: {problem_text_line}\n"
+    )
 
     # Get chat history from session
     chat_key_base = problem_id if problem_id else str(session.get("pos", 0))

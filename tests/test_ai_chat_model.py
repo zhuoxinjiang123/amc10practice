@@ -17,7 +17,7 @@ class AiChatModelTests(unittest.TestCase):
         self.key_patcher.start()
         self.addCleanup(self.key_patcher.stop)
 
-    def post_ai_chat(self, tutor_mode=None):
+    def post_ai_chat(self, tutor_mode=None, problem_id="1"):
         record = {}
 
         class FakeMessages:
@@ -39,7 +39,7 @@ class AiChatModelTests(unittest.TestCase):
                 "/ai/chat",
                 json={
                     "message": "Can I have a hint?",
-                    "problem_id": "1",
+                    "problem_id": problem_id,
                     "problem_label": "2000 AMC 10 Problem 1",
                     "problem_url": "https://example.com/problem",
                     "tutor_mode": tutor_mode,
@@ -56,6 +56,25 @@ class AiChatModelTests(unittest.TestCase):
         self.assertEqual(record["model"], "claude-opus-4-1-20250805")
         self.assertEqual(record["api_key"], "test-anthropic-key")
         self.assertIn("Use LaTeX-style math formatting", record["system"])
+
+    def test_ai_hint_includes_exact_problem_text_when_available(self):
+        with patch.object(
+            app_module,
+            "get_problem_text",
+            return_value="When the mean, median, and mode are arranged in increasing order, they form an arithmetic progression.",
+        ):
+            response, record = self.post_ai_chat(problem_id="999")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Exact problem text:", record["system"])
+        self.assertIn("mean, median, and mode", record["system"])
+
+    def test_ai_hint_marks_problem_text_as_unavailable_when_missing(self):
+        with patch.object(app_module, "get_problem_text", return_value=""):
+            response, record = self.post_ai_chat(problem_id="999")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Exact problem text: unavailable", record["system"])
 
     def test_ai_hint_model_can_be_overridden_with_env_var(self):
         with patch.dict(app_module.os.environ, {"AI_HINT_MODEL": "claude-sonnet-4-5-20250929"}):
