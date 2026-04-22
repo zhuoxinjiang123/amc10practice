@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: amc10practice
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: AI_HINT_MODEL
+        value: claude-opus-4-1-20250805
+      - key: ANTHROPIC_API_KEY
+        sync: false

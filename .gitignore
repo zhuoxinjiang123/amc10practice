@@ -4,3 +4,4 @@ __pycache__/
 rendered_practice.js
 .worktrees/
 .env
+instance/
