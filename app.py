@@ -479,6 +479,11 @@ def results():
 # ── Claude AI Assistant ───────────────────────────────────────────
 
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+AI_HINT_MODEL = "claude-opus-4-1-20250805"
+
+
+def get_ai_hint_model():
+    return os.environ.get("AI_HINT_MODEL", AI_HINT_MODEL).strip() or AI_HINT_MODEL
 
 SYSTEM_PROMPT = (
     "You are a friendly math tutor helping a student practice AMC 10 problems. "
@@ -522,7 +527,7 @@ def ai_chat():
         messages.append({"role": "user", "content": user_msg})
 
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=get_ai_hint_model(),
             max_tokens=300,
             system=SYSTEM_PROMPT + "\n" + context,
             messages=messages,
