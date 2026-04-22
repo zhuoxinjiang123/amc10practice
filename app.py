@@ -34,6 +34,7 @@ DIFFICULTY_LABELS = {
     "medium": "Medium",
     "hard": "Hard",
 }
+QUESTION_COUNTDOWN_SECONDS = 5 * 60
 USER_AGENT = "amc10-practice/0.1 (educational use)"
 
 
@@ -551,6 +552,7 @@ def question_page(problem_id):
         topic_name=topic_name,
         topic_slug=topic_slug,
         back_to_topic_url=back_to_topic_url,
+        question_countdown_seconds=QUESTION_COUNTDOWN_SECONDS,
         ai_tutor_modes=AI_TUTOR_MODES,
         default_ai_tutor_mode=DEFAULT_AI_TUTOR_MODE,
     ))

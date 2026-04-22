@@ -45,6 +45,17 @@ class QuestionPageTests(unittest.TestCase):
         self.assertIn("Step-by-step", html)
         self.assertIn("tex-svg.js", html)
 
+    def test_question_page_renders_elapsed_and_countdown_timers(self):
+        response = self.client.get(f"/question/{self.problem['problem_id']}?difficulty=all")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="elapsed-timer"', html)
+        self.assertIn('id="countdown-timer"', html)
+        self.assertIn('data-countdown-seconds="300"', html)
+        self.assertIn("Time spent", html)
+        self.assertIn("Time left", html)
+
 
 if __name__ == "__main__":
     unittest.main()
