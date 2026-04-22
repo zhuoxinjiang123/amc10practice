@@ -29,6 +29,19 @@ class QuestionPageTests(unittest.TestCase):
         self.assertIn('value="C"', html)
         self.assertIn("btn-answer-selected", html)
 
+    def test_question_page_renders_ai_tutor_mode_selector(self):
+        response = self.client.get(f"/question/{self.problem['problem_id']}?difficulty=all")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="ai-mode"', html)
+        self.assertIn('value="hint"', html)
+        self.assertIn('value="socratic"', html)
+        self.assertIn('value="step_by_step"', html)
+        self.assertIn('value="challenge"', html)
+        self.assertIn("Step-by-step", html)
+        self.assertIn("tex-svg.js", html)
+
 
 if __name__ == "__main__":
     unittest.main()

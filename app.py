@@ -15,7 +15,9 @@ from flask import Flask, abort, render_template, session, redirect, url_for, req
 app = Flask(__name__)
 app.secret_key = "amc10-practice-key-change-me"
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+APP_ROOT = Path(__file__).resolve().parent
+DATA_DIR = APP_ROOT / "data"
+ENV_FILE_PATH = APP_ROOT / ".env"
 PROGRESS_DB_PATH = Path(app.instance_path) / "amc10_progress.sqlite3"
 app.config.setdefault("PROGRESS_DB_PATH", PROGRESS_DB_PATH)
 
@@ -29,6 +31,38 @@ DIFFICULTY_LABELS = {
     "medium": "Medium",
     "hard": "Hard",
 }
+
+
+def load_local_env(path=None):
+    env_path = Path(path) if path is not None else ENV_FILE_PATH
+    loaded = {}
+    if not env_path.exists():
+        return loaded
+
+    for raw_line in env_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or key in os.environ:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+
+        os.environ[key] = value
+        loaded[key] = value
+
+    return loaded
+
+
+load_local_env()
 
 
 def utc_now_iso():
@@ -434,6 +468,8 @@ def question_page(problem_id):
         topic_name=topic_name,
         topic_slug=topic_slug,
         back_to_topic_url=back_to_topic_url,
+        ai_tutor_modes=AI_TUTOR_MODES,
+        default_ai_tutor_mode=DEFAULT_AI_TUTOR_MODE,
     ))
     return no_store(response)
 
@@ -478,12 +514,42 @@ def results():
 
 # ── Claude AI Assistant ───────────────────────────────────────────
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 AI_HINT_MODEL = "claude-opus-4-1-20250805"
+AI_TUTOR_MODES = {
+    "hint": {
+        "label": "Hint",
+        "instruction": "Give a gentle hint that nudges the student toward the next useful idea without outlining the full solution.",
+        "intro": "Hint mode is on. I will give you a small push without spoiling the path.",
+        "placeholder": "Ask for a hint...",
+    },
+    "socratic": {
+        "label": "Socratic",
+        "instruction": "Use a Socratic tutoring style: ask guiding questions, reveal as little as possible, and help the student discover the next step themselves.",
+        "intro": "Socratic mode is on. I will mostly respond with guiding questions.",
+        "placeholder": "Ask for a guiding question...",
+    },
+    "step_by_step": {
+        "label": "Step-by-step",
+        "instruction": "Give a clearer step-by-step walkthrough, but still do not reveal the final answer letter or numeric answer.",
+        "intro": "Step-by-step mode is on. I will explain the path more directly without giving the final answer.",
+        "placeholder": "Ask for a step-by-step explanation...",
+    },
+    "challenge": {
+        "label": "Challenge",
+        "instruction": "Be extra concise and challenging: offer only a very short nudge or a checkpoint to test the student's thinking.",
+        "intro": "Challenge mode is on. I will keep hints very short so you do more of the work.",
+        "placeholder": "Ask for a tiny nudge...",
+    },
+}
+DEFAULT_AI_TUTOR_MODE = "hint"
 
 
 def get_ai_hint_model():
     return os.environ.get("AI_HINT_MODEL", AI_HINT_MODEL).strip() or AI_HINT_MODEL
+
+
+def get_anthropic_key():
+    return os.environ.get("ANTHROPIC_API_KEY", "").strip()
 
 SYSTEM_PROMPT = (
     "You are a friendly math tutor helping a student practice AMC 10 problems. "
@@ -493,20 +559,36 @@ SYSTEM_PROMPT = (
     "- Use simple language suitable for a middle/high school student.\n"
     "- If the student asks for the answer directly, encourage them to try first.\n"
     "- Keep responses concise (under 150 words).\n"
-    "- Use plain text. For math, write it readably (e.g. x^2 + 1).\n"
+    "- Use LaTeX-style math formatting for mathematical expressions within otherwise plain text explanations.\n"
+    "- For inline math use \\( ... \\). For displayed equations use \\[ ... \\].\n"
+    "- Prefer nicely formatted fractions, exponents, radicals, sums, and aligned equations when helpful.\n"
 )
+
+
+def normalize_ai_tutor_mode(value):
+    candidate = (value or DEFAULT_AI_TUTOR_MODE).strip().lower()
+    if candidate in AI_TUTOR_MODES:
+        return candidate
+    return DEFAULT_AI_TUTOR_MODE
+
+
+def build_ai_system_prompt(tutor_mode):
+    mode = normalize_ai_tutor_mode(tutor_mode)
+    return SYSTEM_PROMPT + "\n" + AI_TUTOR_MODES[mode]["instruction"]
 
 
 @app.route("/ai/chat", methods=["POST"])
 def ai_chat():
-    if not ANTHROPIC_KEY:
-        return jsonify({"error": "ANTHROPIC_API_KEY not set. Set it and restart."}), 400
+    anthropic_key = get_anthropic_key()
+    if not anthropic_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY not set. Add it to your environment or a local .env file, then restart."}), 400
 
     data = request.get_json()
     user_msg = (data.get("message") or "").strip()
     problem_label = data.get("problem_label", "")
     problem_url = data.get("problem_url", "")
     problem_id = str(data.get("problem_id") or session.get("active_problem_id") or "").strip()
+    tutor_mode = normalize_ai_tutor_mode(data.get("tutor_mode"))
 
     if not user_msg:
         return jsonify({"error": "Empty message"}), 400
@@ -514,12 +596,13 @@ def ai_chat():
     context = f"The student is working on: {problem_label}.\nProblem URL: {problem_url}\n"
 
     # Get chat history from session
-    chat_key = f"chat_{problem_id}" if problem_id else f"chat_{session.get('pos', 0)}"
+    chat_key_base = problem_id if problem_id else str(session.get("pos", 0))
+    chat_key = f"chat_{chat_key_base}_{tutor_mode}"
     chat_history = session.get(chat_key, [])
 
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        client = anthropic.Anthropic(api_key=anthropic_key)
 
         messages = []
         for msg in chat_history:
@@ -529,7 +612,7 @@ def ai_chat():
         response = client.messages.create(
             model=get_ai_hint_model(),
             max_tokens=300,
-            system=SYSTEM_PROMPT + "\n" + context,
+            system=build_ai_system_prompt(tutor_mode) + "\n" + context,
             messages=messages,
         )
         reply = response.content[0].text
