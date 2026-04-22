@@ -83,3 +83,4 @@ install.packages(c("httr2", "rvest", "dplyr", "stringr", "tidyr",
   `scrape_amc10.R` (left commented-out by default — adds 1,300 requests).
 - **Swap in AMC 12 / AIME**: same pattern. Change `build_index.py` to enumerate
   the relevant slugs and adjust the category slug list.
+# amc10
