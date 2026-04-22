@@ -1,112 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card setup-card">
-  <h1>AMC 10 Practice</h1>
-  <p class="subtitle">Choose a topic and start solving!</p>
+<div class="card dashboard-card">
+  <h1>AMC 10 Topics</h1>
+  <p class="subtitle">Choose a topic, filter by difficulty, and practice any question you want.</p>
 
-  {% if error %}
-  <div class="alert">{{ error }}</div>
-  {% endif %}
-
-  <form method="post" action="{{ url_for('start') }}">
-
-    <!-- Category selection: big prominent cards -->
-    <p class="section-label">Pick a Topic</p>
-    <div class="cat-grid">
-      {% for cat in categories %}
-      <label class="cat-card cat-{{ loop.index }}">
-        <input type="radio" name="category" value="{{ cat }}"
-               {% if loop.first %}checked{% endif %}>
-        <div class="cat-card-inner">
-          <span class="cat-icon">
-            {% if cat == "Algebra" %}x{% endif %}
-            {% if cat == "Geometry" %}&#9651;{% endif %}
-            {% if cat == "Counting & Probability" %}#{% endif %}
-            {% if cat == "Number Theory" %}N{% endif %}
-          </span>
-          <span class="cat-name">{{ cat }}</span>
-          <span class="cat-count">{{ cat_counts.get(cat, 0) }} problems</span>
-        </div>
-      </label>
-      {% endfor %}
-      <label class="cat-card cat-all">
-        <input type="radio" name="category" value="all">
-        <div class="cat-card-inner">
-          <span class="cat-icon">*</span>
-          <span class="cat-name">All Topics</span>
-          <span class="cat-count">{{ cat_counts.values()|sum }} categorized</span>
-        </div>
-      </label>
-    </div>
-
-    <!-- Secondary settings -->
-    <details class="extra-settings" open>
-      <summary>More settings</summary>
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="year_min">From Year</label>
-          <select name="year_min" id="year_min">
-            {% for y in years %}
-            <option value="{{ y }}" {% if y == 2000 %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="year_max">To Year</label>
-          <select name="year_max" id="year_max">
-            {% for y in years %}
-            <option value="{{ y }}" {% if y == 2025 %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="difficulty">Difficulty</label>
-          <select name="difficulty" id="difficulty">
-            <option value="all">All levels</option>
-            <option value="easy">Easy (#1-10)</option>
-            <option value="medium">Medium (#8-18)</option>
-            <option value="hard">Hard (#16-25)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="count">How many problems?</label>
-          <select name="count" id="count">
-            <option value="5">5</option>
-            <option value="10" selected>10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
-            <option value="25">25</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="timer_mode">Timer</label>
-          <select name="timer_mode" id="timer_mode">
-            <option value="stopwatch">Stopwatch (count up)</option>
-            <option value="countdown">Countdown</option>
-          </select>
-        </div>
-
-        <div class="form-group" id="countdown-input-group" style="display:none;">
-          <label for="countdown_minutes">Countdown (minutes)</label>
-          <input type="number" name="countdown_minutes" id="countdown_minutes"
-                 min="1" max="180" value="30" placeholder="e.g. 30"
-                 class="text-input">
-        </div>
+  <div class="topic-dashboard-grid">
+    {% for item in topic_dashboard %}
+    <a class="topic-dashboard-item" href="{{ url_for('topic_page', topic_slug=item.slug) }}">
+      <div class="topic-dashboard-name">{{ item.topic }}</div>
+      <div class="topic-dashboard-summary">Answered {{ item.answered }} / {{ item.total }}</div>
+      <div class="topic-dashboard-stats">
+        <span>Correct {{ item.correct_total }}</span>
+        <span>Wrong {{ item.wrong_total }}</span>
       </div>
-    </details>
-
-    <script>
-      document.getElementById('timer_mode').addEventListener('change', function() {
-        document.getElementById('countdown-input-group').style.display =
-          this.value === 'countdown' ? '' : 'none';
-      });
-    </script>
-
-    <button type="submit" class="btn btn-primary btn-large">Start Practice</button>
-  </form>
+    </a>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}

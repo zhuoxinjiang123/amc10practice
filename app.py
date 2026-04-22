@@ -7,18 +7,106 @@ pick an answer (A-E), tracks session score, and links to solutions.
 
 import csv
 import os
-import random
+import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-from flask import Flask, render_template, session, redirect, url_for, request, jsonify, make_response
+from flask import Flask, abort, render_template, session, redirect, url_for, request, jsonify, make_response
 
 app = Flask(__name__)
 app.secret_key = "amc10-practice-key-change-me"
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
+PROGRESS_DB_PATH = Path(app.instance_path) / "amc10_progress.sqlite3"
+app.config.setdefault("PROGRESS_DB_PATH", PROGRESS_DB_PATH)
 
 
 CATEGORY_LIST = ["Algebra", "Geometry", "Counting & Probability", "Number Theory"]
 ANSWER_CHOICES = {"A", "B", "C", "D", "E"}
+DIFFICULTY_ORDER = ("all", "easy", "medium", "hard")
+DIFFICULTY_LABELS = {
+    "all": "All",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+}
+
+
+def utc_now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def resolve_db_path(db_path=None):
+    path = Path(db_path) if db_path is not None else Path(app.config["PROGRESS_DB_PATH"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def ensure_db(db_path=None):
+    path = resolve_db_path(db_path)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS question_progress (
+              problem_id TEXT PRIMARY KEY,
+              correct_count INTEGER NOT NULL DEFAULT 0,
+              wrong_count INTEGER NOT NULL DEFAULT 0,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return path
+
+
+def get_db_connection(db_path=None):
+    path = ensure_db(db_path)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def get_progress_map(db_path=None):
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT problem_id, correct_count, wrong_count, updated_at FROM question_progress"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        row["problem_id"]: {
+            "problem_id": row["problem_id"],
+            "correct_count": row["correct_count"],
+            "wrong_count": row["wrong_count"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    }
+
+
+def record_attempt(db_path, problem_id, is_correct):
+    correct_inc = 1 if is_correct else 0
+    wrong_inc = 0 if is_correct else 1
+    updated_at = utc_now_iso()
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO question_progress (problem_id, correct_count, wrong_count, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(problem_id) DO UPDATE SET
+              correct_count = correct_count + excluded.correct_count,
+              wrong_count = wrong_count + excluded.wrong_count,
+              updated_at = excluded.updated_at
+            """,
+            (problem_id, correct_inc, wrong_inc, updated_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def load_problems():
@@ -71,6 +159,128 @@ def normalize_topic(problem):
         raw_topic = problem or ""
     topic = str(raw_topic).strip()
     return topic or "Uncategorized"
+
+
+def slugify_topic(topic_name):
+    cleaned = normalize_topic(topic_name).lower()
+    cleaned = cleaned.replace("&", "")
+    cleaned = cleaned.replace("/", " ")
+    parts = cleaned.split()
+    return "-".join(parts)
+
+
+def difficulty_matches(problem, difficulty):
+    difficulty = (difficulty or "all").strip().lower()
+    if difficulty == "all":
+        return True
+    problem_num = int(problem["problem_num"])
+    if difficulty == "easy":
+        return problem_num <= 10
+    if difficulty == "medium":
+        return 8 <= problem_num <= 18
+    if difficulty == "hard":
+        return problem_num >= 16
+    return True
+
+
+def normalize_difficulty(value):
+    difficulty = (value or "all").strip().lower()
+    if difficulty in DIFFICULTY_ORDER:
+        return difficulty
+    return "all"
+
+
+def sort_catalog_problems(problems):
+    return sorted(
+        problems,
+        key=lambda problem: (
+            int(problem.get("year") or 0),
+            (problem.get("version") or "").strip(),
+            int(problem.get("problem_num") or 0),
+            int(problem.get("problem_id") or 0),
+        ),
+    )
+
+
+def topic_status_text(correct_count, wrong_count):
+    if correct_count == 0 and wrong_count == 0:
+        return "Not answered yet"
+    return f"Correct: {correct_count} / Wrong: {wrong_count}"
+
+
+def merge_problem_progress(problem, progress_map):
+    progress = progress_map.get(problem["problem_id"], {})
+    correct_count = int(progress.get("correct_count", 0))
+    wrong_count = int(progress.get("wrong_count", 0))
+    answered = (correct_count + wrong_count) > 0
+
+    merged = dict(problem)
+    merged["correct_count"] = correct_count
+    merged["wrong_count"] = wrong_count
+    merged["answered"] = answered
+    merged["status_text"] = topic_status_text(correct_count, wrong_count)
+    merged["status_marker"] = "[x]" if answered else "[ ]"
+    return merged
+
+
+def find_topic_by_slug(topic_slug):
+    for topic in sorted({normalize_topic(problem) for problem in PROBLEMS}, key=str.lower):
+        if slugify_topic(topic) == topic_slug:
+            return topic
+    return None
+
+
+def get_topic_problem_rows(topic_name, progress_map, difficulty="all"):
+    filtered = []
+    for problem in PROBLEMS:
+        if normalize_topic(problem) != topic_name:
+            continue
+        if not difficulty_matches(problem, difficulty):
+            continue
+        filtered.append(merge_problem_progress(problem, progress_map))
+    return sort_catalog_problems(filtered)
+
+
+def build_topic_summary(topic_name, progress_map):
+    merged_problems = [
+        merge_problem_progress(problem, progress_map)
+        for problem in PROBLEMS
+        if normalize_topic(problem) == topic_name
+    ]
+    return {
+        "topic": topic_name,
+        "slug": slugify_topic(topic_name),
+        "total": len(merged_problems),
+        "answered": sum(1 for problem in merged_problems if problem["answered"]),
+        "correct_total": sum(problem["correct_count"] for problem in merged_problems),
+        "wrong_total": sum(problem["wrong_count"] for problem in merged_problems),
+    }
+
+
+def build_topic_dashboard(problems, progress_map):
+    summary = {}
+
+    for problem in problems:
+        topic = normalize_topic(problem)
+        if topic not in summary:
+            summary[topic] = {
+                "topic": topic,
+                "slug": slugify_topic(topic),
+                "total": 0,
+                "answered": 0,
+                "correct_total": 0,
+                "wrong_total": 0,
+            }
+
+        merged_problem = merge_problem_progress(problem, progress_map)
+        bucket = summary[topic]
+        bucket["total"] += 1
+        if merged_problem["answered"]:
+            bucket["answered"] += 1
+        bucket["correct_total"] += merged_problem["correct_count"]
+        bucket["wrong_total"] += merged_problem["wrong_count"]
+
+    return sorted(summary.values(), key=lambda item: item["topic"].lower())
 
 
 def build_topic_progress(queue, history, problems_by_id):
@@ -172,148 +382,98 @@ def no_store(response):
 
 @app.route("/")
 def index():
-    return render_template("index.html", years=ALL_YEARS,
-                           categories=CATEGORY_LIST, cat_counts=CAT_COUNTS)
+    topic_dashboard = build_topic_dashboard(PROBLEMS, get_progress_map())
+    return render_template("index.html", topic_dashboard=topic_dashboard)
+
+
+@app.route("/topic/<topic_slug>")
+def topic_page(topic_slug):
+    topic_name = find_topic_by_slug(topic_slug)
+    if not topic_name:
+        abort(404)
+
+    difficulty = normalize_difficulty(request.args.get("difficulty"))
+    progress_map = get_progress_map()
+    topic_summary = build_topic_summary(topic_name, progress_map)
+    problems = get_topic_problem_rows(topic_name, progress_map, difficulty=difficulty)
+
+    response = make_response(render_template(
+        "topic.html",
+        topic_summary=topic_summary,
+        problems=problems,
+        difficulty_options=[{"value": value, "label": DIFFICULTY_LABELS[value]} for value in DIFFICULTY_ORDER],
+        selected_difficulty=difficulty,
+    ))
+    return no_store(response)
+
+
+@app.route("/question/<problem_id>")
+def question_page(problem_id):
+    problem = PROB_BY_ID.get(problem_id)
+    if not problem:
+        abort(404)
+
+    difficulty = normalize_difficulty(request.args.get("difficulty"))
+    selected_choice = (request.args.get("selected") or "").strip().upper()
+    if selected_choice not in ANSWER_CHOICES:
+        selected_choice = ""
+
+    progress_map = get_progress_map()
+    problem_with_progress = merge_problem_progress(problem, progress_map)
+    topic_name = normalize_topic(problem)
+    topic_slug = slugify_topic(topic_name)
+    back_to_topic_url = url_for("topic_page", topic_slug=topic_slug, difficulty=difficulty)
+    session["active_problem_id"] = problem_id
+
+    response = make_response(render_template(
+        "practice.html",
+        problem=problem_with_progress,
+        selected_choice=selected_choice,
+        solution_url=solution_url(problem),
+        selected_difficulty=difficulty,
+        topic_name=topic_name,
+        topic_slug=topic_slug,
+        back_to_topic_url=back_to_topic_url,
+    ))
+    return no_store(response)
+
+
+@app.route("/question/<problem_id>/answer", methods=["POST"])
+def submit_question_answer(problem_id):
+    problem = PROB_BY_ID.get(problem_id)
+    if not problem:
+        abort(404)
+
+    difficulty = normalize_difficulty(request.form.get("difficulty"))
+    raw_choice = (request.form.get("choice", "") or "").strip().upper()
+    if raw_choice not in ANSWER_CHOICES:
+        return redirect(url_for("question_page", problem_id=problem_id, difficulty=difficulty))
+
+    correct_answer = (problem.get("correct_answer") or "").strip().upper()
+    if correct_answer in ANSWER_CHOICES:
+        record_attempt(resolve_db_path(), problem_id, raw_choice == correct_answer)
+
+    return redirect(url_for("topic_page", topic_slug=slugify_topic(problem), difficulty=difficulty))
 
 
 @app.route("/start", methods=["POST"])
 def start():
-    """Apply filters, build a problem queue, redirect to first problem."""
-    year_min = int(request.form.get("year_min", 2000))
-    year_max = int(request.form.get("year_max", 2025))
-    difficulty = request.form.get("difficulty", "all")
-    category = request.form.get("category", "all")
-    count = int(request.form.get("count", 10))
-    timer_mode = request.form.get("timer_mode", "stopwatch")
-    countdown_minutes = int(request.form.get("countdown_minutes", 30))
-
-    pool = filter_problems(year_min, year_max, difficulty, category)
-    if not pool:
-        return render_template("index.html", years=ALL_YEARS,
-                               categories=CATEGORY_LIST, cat_counts=CAT_COUNTS,
-                               error="No problems match your filters. Try wider settings.")
-
-    selected = random.sample(pool, min(count, len(pool)))
-    session["queue"] = [p["problem_id"] for p in selected]
-    session["pos"] = 0
-    session["history"] = []
-    session["timer"] = {
-        "mode": timer_mode,
-        "countdown_seconds": countdown_minutes * 60 if timer_mode == "countdown" else 0,
-    }
-    session["settings"] = {
-        "year_min": year_min, "year_max": year_max,
-        "difficulty": difficulty, "category": category, "count": count,
-        "timer_mode": timer_mode, "countdown_minutes": countdown_minutes,
-    }
-    return redirect(url_for("practice", step=1))
+    return redirect(url_for("index"))
 
 
 @app.route("/practice")
 def practice():
-    queue = session.get("queue", [])
-    pos = session.get("pos", 0)
-    if not queue or pos >= len(queue):
-        return redirect(url_for("results"))
-
-    pid = queue[pos]
-    problem = PROB_BY_ID.get(pid)
-    if not problem:
-        return redirect(url_for("results"))
-
-    total = len(queue)
-    history = session.get("history", [])
-    correct_count = sum(1 for h in history if h.get("correct"))
-    selected_choice = (request.args.get("selected") or "").strip().upper()
-    if selected_choice not in {"A", "B", "C", "D", "E"}:
-        selected_choice = ""
-
-    timer = session.get("timer", {"mode": "stopwatch", "countdown_seconds": 0})
-
-    response = make_response(render_template(
-        "practice.html",
-        problem=problem,
-        pos=pos + 1,
-        total=total,
-        correct_count=correct_count,
-        attempted=len(history),
-        solution_url=solution_url(problem),
-        selected_choice=selected_choice,
-        timer_mode=timer["mode"],
-        countdown_seconds=timer["countdown_seconds"],
-    ))
-    return no_store(response)
+    return redirect(url_for("index"))
 
 
 @app.route("/answer", methods=["POST"])
 def answer():
-    """Record an answer (or skip) and move to next problem."""
-    raw_choice = (request.form.get("choice", "") or "").strip().upper()
-    time_spent = int(request.form.get("time_spent", 0))
-
-    queue = session.get("queue", [])
-    pos = session.get("pos", 0)
-    if raw_choice == "SKIP":
-        choice = "skip"
-    elif raw_choice in ANSWER_CHOICES:
-        choice = raw_choice
-    else:
-        return redirect(url_for("practice", step=pos + 1))
-
-    if pos < len(queue):
-        pid = queue[pos]
-        problem = PROB_BY_ID.get(pid, {})
-        correct_answer = problem.get("correct_answer", "")
-        is_skip = choice == "skip"
-        history = session.get("history", [])
-        history.append({
-            "id": pid,
-            "answer": choice if not is_skip else None,
-            "correct": None if is_skip else choice == correct_answer,
-            "skipped": is_skip,
-            "time": time_spent,
-        })
-        session["history"] = history
-        session["pos"] = pos + 1
-
-    return redirect(url_for("practice", step=session.get("pos", 0) + 1))
+    return redirect(url_for("index"))
 
 
 @app.route("/results")
 def results():
-    history = session.get("history", [])
-    queue = session.get("queue", [])
-    settings = session.get("settings", {})
-
-    detail = []
-    total_time = 0
-    for h in history:
-        p = PROB_BY_ID.get(h["id"], {})
-        t = h.get("time", 0)
-        total_time += t
-        detail.append({
-            "contest": p.get("contest_label", ""),
-            "num": p.get("problem_num", ""),
-            "answer": h.get("answer", "-"),
-            "skipped": h.get("skipped", False),
-            "url": p.get("problem_url", ""),
-            "solution_url": solution_url(p) if p else "",
-            "time": t,
-        })
-
-    answered = sum(1 for h in history if not h.get("skipped"))
-    skipped = sum(1 for h in history if h.get("skipped"))
-
-    response = make_response(render_template(
-        "results.html",
-        detail=detail,
-        total=len(queue),
-        answered=answered,
-        skipped=skipped,
-        total_time=total_time,
-        settings=settings,
-    ))
-    return no_store(response)
+    return redirect(url_for("index"))
 
 
 # ── Claude AI Assistant ───────────────────────────────────────────
@@ -341,6 +501,7 @@ def ai_chat():
     user_msg = (data.get("message") or "").strip()
     problem_label = data.get("problem_label", "")
     problem_url = data.get("problem_url", "")
+    problem_id = str(data.get("problem_id") or session.get("active_problem_id") or "").strip()
 
     if not user_msg:
         return jsonify({"error": "Empty message"}), 400
@@ -348,7 +509,7 @@ def ai_chat():
     context = f"The student is working on: {problem_label}.\nProblem URL: {problem_url}\n"
 
     # Get chat history from session
-    chat_key = f"chat_{session.get('pos', 0)}"
+    chat_key = f"chat_{problem_id}" if problem_id else f"chat_{session.get('pos', 0)}"
     chat_history = session.get(chat_key, [])
 
     try:

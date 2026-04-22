@@ -2,16 +2,17 @@
 
 {% block header_right %}
 <div class="progress-info">
-  <span id="timer" class="timer">0:00</span>
-  &nbsp;&middot;&nbsp;
-  Problem {{ pos }} / {{ total }}
-  &nbsp;&middot;&nbsp;
-  Answered: {{ attempted }}
+  {{ topic_name }} &nbsp;&middot;&nbsp; {{ problem.status_text }}
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="practice-layout">
+  <div class="practice-topbar">
+    <a class="back-link" href="{{ back_to_topic_url }}">&larr; Back to {{ topic_name }}</a>
+    <span class="practice-status">Current record: {{ problem.status_text }}</span>
+  </div>
+
   <!-- Problem info bar -->
   <div class="problem-bar">
     <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
@@ -27,11 +28,6 @@
         Open on AoPS &nearr;
       </a>
     </div>
-  </div>
-
-  <!-- Progress bar -->
-  <div class="progress-bar-track">
-    <div class="progress-bar-fill" style="width: {{ (pos / total * 100)|int }}%"></div>
   </div>
 
   <!-- Embedded problem page -->
@@ -65,14 +61,14 @@
 
   <!-- Answer section -->
   <div class="answer-section">
-    <form id="answer-form" action="{{ url_for('answer') }}" method="post">
+    <form id="answer-form" action="{{ url_for('submit_question_answer', problem_id=problem.problem_id) }}" method="post">
       <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
-      <input type="hidden" id="time_spent" name="time_spent" value="0">
+      <input type="hidden" name="difficulty" value="{{ selected_difficulty }}">
       <p class="answer-prompt">Your answer:</p>
       <div class="answer-buttons">
         {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
         <a
-          href="{{ url_for('practice', selected=letter, step=pos) }}"
+          href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty, selected=letter) }}"
           class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
         >{{ letter }}</a>
         {% endfor %}
@@ -82,14 +78,8 @@
         <button type="submit" class="btn btn-primary" id="submit-btn">
           Submit &rarr;
         </button>
-        <button type="submit" class="btn btn-skip" id="skip-btn" form="skip-form">
-          Skip
-        </button>
+        <a class="btn btn-skip" href="{{ back_to_topic_url }}">Back to list</a>
       </div>
-    </form>
-    <form id="skip-form" action="{{ url_for('answer') }}" method="post">
-      <input type="hidden" name="choice" value="skip">
-      <input type="hidden" id="skip-time-spent" name="time_spent" value="0">
     </form>
 
     <div class="solution-reveal">
@@ -113,70 +103,6 @@
     });
   })();
 
-  // Timer
-  (function() {
-    const timerEl = document.getElementById('timer');
-    const timeInput = document.getElementById('time_spent');
-    const skipTimeInput = document.getElementById('skip-time-spent');
-    const skipForm = document.getElementById('skip-form');
-    const timerMode = '{{ timer_mode }}';
-    const countdownTotal = {{ countdown_seconds }};
-    const currentPos = {{ pos }};
-
-    const problemKey = 'amc10_problem_start';
-    const posKey = 'amc10_pos';
-    const sessionStartKey = 'amc10_session_start';
-
-    let problemStart;
-    const storedPos = sessionStorage.getItem(posKey);
-    if (storedPos !== String(currentPos)) {
-      problemStart = Date.now();
-      sessionStorage.setItem(problemKey, problemStart);
-      sessionStorage.setItem(posKey, currentPos);
-      if (currentPos === 1) {
-        sessionStorage.setItem(sessionStartKey, Date.now());
-      }
-    } else {
-      problemStart = parseInt(sessionStorage.getItem(problemKey)) || Date.now();
-    }
-
-    const sessionStart = parseInt(sessionStorage.getItem(sessionStartKey)) || Date.now();
-    let expired = false;
-
-    function formatTime(sec) {
-      const m = Math.floor(sec / 60);
-      const s = sec % 60;
-      return m + ':' + (s < 10 ? '0' : '') + s;
-    }
-
-    function update() {
-      const now = Date.now();
-      const problemElapsed = Math.floor((now - problemStart) / 1000);
-      timeInput.value = problemElapsed;
-      if (skipTimeInput) skipTimeInput.value = problemElapsed;
-
-      if (timerMode === 'countdown') {
-        const sessionElapsed = Math.floor((now - sessionStart) / 1000);
-        const remaining = countdownTotal - sessionElapsed;
-        if (remaining <= 0) {
-          timerEl.textContent = '0:00';
-          timerEl.classList.add('timer-expired');
-          if (!expired) {
-            expired = true;
-            if (skipForm) skipForm.submit();
-          }
-          return;
-        }
-        timerEl.textContent = formatTime(remaining);
-        if (remaining <= 60) timerEl.classList.add('timer-warning');
-      } else {
-        timerEl.textContent = formatTime(problemElapsed);
-      }
-      requestAnimationFrame(update);
-    }
-    update();
-  })();
-
   // AI Chat
   (function() {
     const panel = document.getElementById('ai-panel');
@@ -188,6 +114,7 @@
 
     const problemLabel = '{{ problem.contest_label }} Problem {{ problem.problem_num }}';
     const problemUrl = '{{ problem.problem_url }}';
+    const problemId = '{{ problem.problem_id }}';
 
     toggle.addEventListener('click', () => {
       panel.style.display = panel.style.display === 'none' ? '' : 'none';
@@ -216,6 +143,7 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             message: msg,
+            problem_id: problemId,
             problem_label: problemLabel,
             problem_url: problemUrl,
           }),

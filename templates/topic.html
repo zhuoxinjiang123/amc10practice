@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block header_right %}
+<div class="progress-info">
+  Answered {{ topic_summary.answered }} / {{ topic_summary.total }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card topic-card">
+  <div class="topic-hero">
+    <div>
+      <p class="topic-kicker">Topic Browser</p>
+      <h1>{{ topic_summary.topic }}</h1>
+      <p class="subtitle">Pick any question from the list. Each row shows lifetime history from your saved attempts.</p>
+    </div>
+    <div class="topic-metrics">
+      <div class="topic-metric">
+        <span class="topic-metric-number">{{ topic_summary.answered }}</span>
+        <span class="topic-metric-label">Answered / {{ topic_summary.total }}</span>
+      </div>
+      <div class="topic-metric">
+        <span class="topic-metric-number">{{ topic_summary.correct_total }}</span>
+        <span class="topic-metric-label">Correct</span>
+      </div>
+      <div class="topic-metric">
+        <span class="topic-metric-number">{{ topic_summary.wrong_total }}</span>
+        <span class="topic-metric-label">Wrong</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="difficulty-tabs" role="tablist" aria-label="Difficulty filters">
+    {% for option in difficulty_options %}
+    <a
+      href="{{ url_for('topic_page', topic_slug=topic_summary.slug, difficulty=option.value) }}"
+      class="difficulty-chip{% if selected_difficulty == option.value %} difficulty-chip-active{% endif %}"
+    >
+      {{ option.label }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="topic-list-meta">
+    <span>{{ problems|length }} questions shown</span>
+    <a class="back-link" href="{{ url_for('index') }}">&larr; Back to topics</a>
+  </div>
+
+  <div class="question-list">
+    {% for problem in problems %}
+    <a
+      class="question-row"
+      href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty) }}"
+    >
+      <span class="question-marker">{{ problem.status_marker }}</span>
+      <div class="question-row-main">
+        <div class="question-title">{{ problem.contest_label }} - Problem {{ problem.problem_num }}</div>
+        <div class="question-status">{{ problem.status_text }}</div>
+      </div>
+      <span class="question-action">Practice &rarr;</span>
+    </a>
+    {% else %}
+    <div class="topic-empty">No questions match this difficulty filter yet.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
