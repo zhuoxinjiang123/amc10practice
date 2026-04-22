@@ -34,6 +34,9 @@ class QuestionPageTests(unittest.TestCase):
         html = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn('class="container container-wide"', html)
+        self.assertIn('class="practice-main"', html)
+        self.assertIn('class="practice-sidebar"', html)
         self.assertIn('id="ai-mode"', html)
         self.assertIn('value="hint"', html)
         self.assertIn('value="socratic"', html)

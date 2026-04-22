@@ -8,7 +8,7 @@
 </head>
 <body>
   <header>
-    <div class="container header-bar">
+    <div class="{% block header_container_class %}container{% endblock %} header-bar">
       <a href="{{ url_for('index') }}" class="logo">AMC 10 Practice</a>
       <div class="header-controls">
         {% block header_right %}{% endblock %}
@@ -19,7 +19,7 @@
       </div>
     </div>
   </header>
-  <main class="container">
+  <main class="{% block main_container_class %}container{% endblock %}">
     {% block content %}{% endblock %}
   </main>
   <script>

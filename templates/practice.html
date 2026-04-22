@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 
+{% block header_container_class %}container container-wide{% endblock %}
+{% block main_container_class %}container container-wide{% endblock %}
+
 {% block header_right %}
 <div class="progress-info">
   {{ topic_name }} &nbsp;&middot;&nbsp; {{ problem.status_text }}
@@ -13,97 +16,103 @@
     <span class="practice-status">Current record: {{ problem.status_text }}</span>
   </div>
 
-  <!-- Problem info bar -->
-  <div class="problem-bar">
-    <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
-      {% if problem.category and problem.category != 'Uncategorized' %}
-        <span class="problem-cat-badge">{{ problem.category }}</span>
-      {% endif %}
-    </span>
-    <div class="problem-bar-actions">
-      <button type="button" id="ai-toggle" class="btn btn-small btn-ai" title="Ask AI for a hint">
-        AI Hint
-      </button>
-      <a href="{{ problem.problem_url }}" target="_blank" class="btn btn-small btn-outline">
-        Open on AoPS &nearr;
-      </a>
-    </div>
-  </div>
-
-  <!-- Embedded problem page -->
-  <div class="problem-frame-wrap">
-    <iframe
-      src="{{ problem.problem_url }}"
-      class="problem-frame"
-      sandbox="allow-same-origin allow-scripts"
-      loading="lazy"
-    ></iframe>
-    <div class="frame-fallback">
-      Can't see the problem?
-      <a href="{{ problem.problem_url }}" target="_blank">Open it directly on AoPS</a>
-    </div>
-  </div>
-
-  <!-- AI Chat Panel (hidden by default) -->
-  <div id="ai-panel" class="ai-panel" style="display:none;">
-    <div class="ai-panel-header">
-      <span>AI Tutor</span>
-      <button type="button" id="ai-close" class="ai-close">&times;</button>
-    </div>
-    <div class="ai-mode-row">
-      <label for="ai-mode" class="ai-mode-label">Tutor mode</label>
-      <select id="ai-mode" class="ai-mode-select">
-        {% for mode_key, mode_config in ai_tutor_modes.items() %}
-        <option
-          value="{{ mode_key }}"
-          data-intro="{{ mode_config.intro }}"
-          data-placeholder="{{ mode_config.placeholder }}"
-          {% if mode_key == default_ai_tutor_mode %}selected{% endif %}
-        >
-          {{ mode_config.label }}
-        </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div id="ai-mode-intro" class="ai-mode-intro">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
-    <div id="ai-messages" class="ai-messages">
-      <div class="ai-msg ai-msg-bot">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
-    </div>
-    <div class="ai-input-row">
-      <input type="text" id="ai-input" class="ai-input" placeholder="{{ ai_tutor_modes[default_ai_tutor_mode].placeholder }}" autocomplete="off">
-      <button type="button" id="ai-send" class="btn btn-primary btn-small">Send</button>
-    </div>
-  </div>
-
-  <!-- Answer section -->
-  <div class="answer-section">
-    <form id="answer-form" action="{{ url_for('submit_question_answer', problem_id=problem.problem_id) }}" method="post">
-      <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
-      <input type="hidden" name="difficulty" value="{{ selected_difficulty }}">
-      <p class="answer-prompt">Your answer:</p>
-      <div class="answer-buttons">
-        {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
-        <a
-          href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty, selected=letter) }}"
-          class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
-        >{{ letter }}</a>
-        {% endfor %}
+  <div class="practice-main">
+    <div class="practice-primary">
+      <!-- Problem info bar -->
+      <div class="problem-bar">
+        <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
+          {% if problem.category and problem.category != 'Uncategorized' %}
+            <span class="problem-cat-badge">{{ problem.category }}</span>
+          {% endif %}
+        </span>
+        <div class="problem-bar-actions">
+          <button type="button" id="ai-toggle" class="btn btn-small btn-ai" title="Show or hide the AI tutor">
+            Hide AI
+          </button>
+          <a href="{{ problem.problem_url }}" target="_blank" class="btn btn-small btn-outline">
+            Open on AoPS &nearr;
+          </a>
+        </div>
       </div>
-      <div class="submit-row" id="submit-row"{% if not selected_choice %} style="display:none;"{% endif %}>
-        <span id="selected-label" class="selected-label" aria-live="polite">Selected: {{ selected_choice or 'none' }}</span>
-        <button type="submit" class="btn btn-primary" id="submit-btn">
-          Submit &rarr;
-        </button>
-        <a class="btn btn-skip" href="{{ back_to_topic_url }}">Back to list</a>
-      </div>
-    </form>
 
-    <div class="solution-reveal">
-      <details>
-        <summary>Show solution link</summary>
-        <a href="{{ solution_url }}" target="_blank">View solution on AoPS &nearr;</a>
-      </details>
+      <!-- Embedded problem page -->
+      <div class="problem-frame-wrap">
+        <iframe
+          src="{{ problem.problem_url }}"
+          class="problem-frame"
+          sandbox="allow-same-origin allow-scripts"
+          loading="lazy"
+        ></iframe>
+        <div class="frame-fallback">
+          Can't see the problem?
+          <a href="{{ problem.problem_url }}" target="_blank">Open it directly on AoPS</a>
+        </div>
+      </div>
+
+      <!-- Answer section -->
+      <div class="answer-section">
+        <form id="answer-form" action="{{ url_for('submit_question_answer', problem_id=problem.problem_id) }}" method="post">
+          <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
+          <input type="hidden" name="difficulty" value="{{ selected_difficulty }}">
+          <p class="answer-prompt">Your answer:</p>
+          <div class="answer-buttons">
+            {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
+            <a
+              href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty, selected=letter) }}"
+              class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
+            >{{ letter }}</a>
+            {% endfor %}
+          </div>
+          <div class="submit-row" id="submit-row"{% if not selected_choice %} style="display:none;"{% endif %}>
+            <span id="selected-label" class="selected-label" aria-live="polite">Selected: {{ selected_choice or 'none' }}</span>
+            <button type="submit" class="btn btn-primary" id="submit-btn">
+              Submit &rarr;
+            </button>
+            <a class="btn btn-skip" href="{{ back_to_topic_url }}">Back to list</a>
+          </div>
+        </form>
+
+        <div class="solution-reveal">
+          <details>
+            <summary>Show solution link</summary>
+            <a href="{{ solution_url }}" target="_blank">View solution on AoPS &nearr;</a>
+          </details>
+        </div>
+      </div>
     </div>
+
+    <!-- AI Chat Panel on the right -->
+    <aside id="practice-sidebar" class="practice-sidebar">
+      <div id="ai-panel" class="ai-panel">
+        <div class="ai-panel-header">
+          <span>AI Tutor</span>
+          <button type="button" id="ai-close" class="ai-close" title="Hide AI tutor">&times;</button>
+        </div>
+        <div class="ai-mode-row">
+          <label for="ai-mode" class="ai-mode-label">Tutor mode</label>
+          <select id="ai-mode" class="ai-mode-select">
+            {% for mode_key, mode_config in ai_tutor_modes.items() %}
+            <option
+              value="{{ mode_key }}"
+              data-intro="{{ mode_config.intro }}"
+              data-placeholder="{{ mode_config.placeholder }}"
+              {% if mode_key == default_ai_tutor_mode %}selected{% endif %}
+            >
+              {{ mode_config.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="ai-mode-intro" class="ai-mode-intro">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
+        <div id="ai-messages" class="ai-messages">
+          <div class="ai-msg ai-msg-bot">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
+        </div>
+        <div class="ai-input-row">
+          <input type="text" id="ai-input" class="ai-input" placeholder="{{ ai_tutor_modes[default_ai_tutor_mode].placeholder }}" autocomplete="off">
+          <button type="button" id="ai-send" class="btn btn-primary btn-small">Send</button>
+        </div>
+      </div>
+    </aside>
   </div>
 </div>
 
@@ -134,6 +143,7 @@
 
   // AI Chat
   (function() {
+    const sidebar = document.getElementById('practice-sidebar');
     const panel = document.getElementById('ai-panel');
     const toggle = document.getElementById('ai-toggle');
     const closeBtn = document.getElementById('ai-close');
@@ -168,16 +178,31 @@
       input.placeholder = mode.placeholder;
     }
 
+    function syncSidebarUi() {
+      const hidden = sidebar.hasAttribute('hidden');
+      toggle.textContent = hidden ? 'Show AI' : 'Hide AI';
+      toggle.setAttribute('aria-pressed', String(!hidden));
+    }
+
     toggle.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'none' ? '' : 'none';
-      if (panel.style.display !== 'none') input.focus();
+      if (sidebar.hasAttribute('hidden')) {
+        sidebar.removeAttribute('hidden');
+        input.focus();
+      } else {
+        sidebar.setAttribute('hidden', '');
+      }
+      syncSidebarUi();
     });
-    closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+    closeBtn.addEventListener('click', () => {
+      sidebar.setAttribute('hidden', '');
+      syncSidebarUi();
+    });
     modeSelect.addEventListener('change', () => {
       syncModeUi();
       input.focus();
     });
     syncModeUi();
+    syncSidebarUi();
 
     function addMsg(text, role) {
       const div = document.createElement('div');
