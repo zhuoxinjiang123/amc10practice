@@ -39,6 +39,13 @@ class IndexDashboardTests(unittest.TestCase):
         self.assertNotIn("How many problems?", html)
         self.assertNotIn("Start Practice", html)
 
+    def test_index_uses_versioned_stylesheet_url_for_cache_busting(self):
+        response = self.client.get("/")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('/static/style.css?v=', html)
+
 
 if __name__ == "__main__":
     unittest.main()

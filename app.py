@@ -73,6 +73,22 @@ def utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def static_asset_version(filename):
+    asset_path = Path(app.static_folder) / filename
+    try:
+        return str(asset_path.stat().st_mtime_ns)
+    except OSError:
+        return "1"
+
+
+@app.context_processor
+def inject_asset_helpers():
+    def versioned_static(filename):
+        return url_for("static", filename=filename, v=static_asset_version(filename))
+
+    return {"versioned_static": versioned_static}
+
+
 def resolve_db_path(db_path=None):
     path = Path(db_path) if db_path is not None else Path(app.config["PROGRESS_DB_PATH"])
     path.parent.mkdir(parents=True, exist_ok=True)
