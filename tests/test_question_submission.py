@@ -1,7 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import app as app_module
 from app import app, ensure_db, get_progress_map, slugify_topic, PROBLEMS
 
 
@@ -75,6 +77,19 @@ class QuestionSubmissionTests(unittest.TestCase):
             f"/question/{self.problem['problem_id']}?difficulty=hard",
         )
         self.assertEqual(get_progress_map(self.db_path), {})
+
+    def test_submission_uses_default_database_backend_for_progress(self):
+        with patch.dict(app_module.os.environ, {"DATABASE_URL": "postgresql://render-db"}):
+            with patch.object(app_module, "record_attempt") as record_attempt_mock:
+                response = self.client.post(
+                    f"/question/{self.problem['problem_id']}/answer",
+                    data={"choice": self.problem["correct_answer"], "difficulty": "medium"},
+                    follow_redirects=False,
+                )
+
+        self.assertEqual(response.status_code, 302)
+        record_attempt_mock.assert_called_once()
+        self.assertIsNone(record_attempt_mock.call_args.args[0])
 
 
 if __name__ == "__main__":

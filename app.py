@@ -96,7 +96,50 @@ def resolve_db_path(db_path=None):
     return path
 
 
+def get_database_url():
+    return os.environ.get("DATABASE_URL", "").strip()
+
+
+def uses_postgres_backend(db_path=None):
+    return db_path is None and bool(get_database_url())
+
+
+def get_postgres_connection():
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise RuntimeError("DATABASE_URL is set, but psycopg is not installed.") from exc
+
+    return psycopg.connect(get_database_url())
+
+
+def ensure_postgres_db():
+    conn = get_postgres_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS question_progress (
+                  problem_id TEXT PRIMARY KEY,
+                  correct_count INTEGER NOT NULL DEFAULT 0,
+                  wrong_count INTEGER NOT NULL DEFAULT 0,
+                  updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+        finally:
+            cur.close()
+    finally:
+        conn.close()
+
+
 def ensure_db(db_path=None):
+    if uses_postgres_backend(db_path):
+        ensure_postgres_db()
+        return get_database_url()
+
     path = resolve_db_path(db_path)
     conn = sqlite3.connect(path)
     try:
@@ -123,7 +166,36 @@ def get_db_connection(db_path=None):
     return conn
 
 
+def get_postgres_progress_map():
+    ensure_postgres_db()
+    conn = get_postgres_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT problem_id, correct_count, wrong_count, updated_at FROM question_progress"
+            )
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+    finally:
+        conn.close()
+
+    return {
+        row[0]: {
+            "problem_id": row[0],
+            "correct_count": row[1],
+            "wrong_count": row[2],
+            "updated_at": row[3],
+        }
+        for row in rows
+    }
+
+
 def get_progress_map(db_path=None):
+    if uses_postgres_backend(db_path):
+        return get_postgres_progress_map()
+
     conn = get_db_connection(db_path)
     try:
         rows = conn.execute(
@@ -142,7 +214,38 @@ def get_progress_map(db_path=None):
     }
 
 
+def record_postgres_attempt(problem_id, is_correct):
+    ensure_postgres_db()
+    correct_inc = 1 if is_correct else 0
+    wrong_inc = 0 if is_correct else 1
+    updated_at = utc_now_iso()
+    conn = get_postgres_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                INSERT INTO question_progress (problem_id, correct_count, wrong_count, updated_at)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT(problem_id) DO UPDATE SET
+                  correct_count = question_progress.correct_count + EXCLUDED.correct_count,
+                  wrong_count = question_progress.wrong_count + EXCLUDED.wrong_count,
+                  updated_at = EXCLUDED.updated_at
+                """,
+                (problem_id, correct_inc, wrong_inc, updated_at),
+            )
+            conn.commit()
+        finally:
+            cur.close()
+    finally:
+        conn.close()
+
+
 def record_attempt(db_path, problem_id, is_correct):
+    if uses_postgres_backend(db_path):
+        record_postgres_attempt(problem_id, is_correct)
+        return
+
     correct_inc = 1 if is_correct else 0
     wrong_inc = 0 if is_correct else 1
     updated_at = utc_now_iso()
@@ -572,7 +675,7 @@ def submit_question_answer(problem_id):
 
     correct_answer = (problem.get("correct_answer") or "").strip().upper()
     if correct_answer in ANSWER_CHOICES:
-        record_attempt(resolve_db_path(), problem_id, raw_choice == correct_answer)
+        record_attempt(None, problem_id, raw_choice == correct_answer)
 
     return redirect(url_for("topic_page", topic_slug=slugify_topic(problem), difficulty=difficulty))
 
