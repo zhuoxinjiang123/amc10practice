@@ -75,6 +75,15 @@ class TopicPageTests(unittest.TestCase):
         response = self.client.get("/topic/not-a-real-topic")
         self.assertEqual(response.status_code, 404)
 
+    def test_topic_page_renders_learning_cockpit_design_hooks(self):
+        response = self.client.get(f"/topic/{self.topic_slug}")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="topic-shell"', html)
+        self.assertIn('class="topic-command-bar"', html)
+        self.assertIn('class="question-status-pill', html)
+
 
 if __name__ == "__main__":
     unittest.main()

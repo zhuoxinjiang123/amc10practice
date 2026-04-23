@@ -46,6 +46,15 @@ class IndexDashboardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('/static/style.css?v=', html)
 
+    def test_index_renders_learning_cockpit_design_hooks(self):
+        response = self.client.get("/")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="dashboard-shell"', html)
+        self.assertIn('class="dashboard-hero"', html)
+        self.assertIn('class="topic-progress-track"', html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,52 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card dashboard-card">
-  <h1>AMC 10 Topics</h1>
-  <p class="subtitle">Choose a topic, filter by difficulty, and practice any question you want.</p>
+{% set total_questions = topic_dashboard|sum(attribute='total') %}
+{% set answered_questions = topic_dashboard|sum(attribute='answered') %}
+{% set correct_total = topic_dashboard|sum(attribute='correct_total') %}
+{% set wrong_total = topic_dashboard|sum(attribute='wrong_total') %}
+<div class="dashboard-shell">
+  <section class="dashboard-hero">
+    <div class="dashboard-hero-copy">
+      <p class="eyebrow">AMC 10 Topics Cockpit</p>
+      <h1>Choose a track. Build momentum one problem at a time.</h1>
+      <p class="subtitle">Topic-first practice with saved lifetime history, quick difficulty filters, and focused AI support when you need a nudge.</p>
+    </div>
+    <div class="dashboard-scorecard">
+      <span class="scorecard-label">Total progress</span>
+      <strong>{{ answered_questions }} / {{ total_questions }}</strong>
+      <span class="scorecard-note">questions practiced</span>
+    </div>
+  </section>
+
+  <section class="dashboard-stats-grid" aria-label="Overall progress">
+    <div class="dashboard-stat">
+      <span class="dashboard-stat-value">{{ topic_dashboard|length }}</span>
+      <span class="dashboard-stat-label">Topic tracks</span>
+    </div>
+    <div class="dashboard-stat">
+      <span class="dashboard-stat-value">{{ correct_total }}</span>
+      <span class="dashboard-stat-label">Lifetime correct</span>
+    </div>
+    <div class="dashboard-stat">
+      <span class="dashboard-stat-value">{{ wrong_total }}</span>
+      <span class="dashboard-stat-label">Lifetime wrong</span>
+    </div>
+  </section>
 
   <div class="topic-dashboard-grid">
     {% for item in topic_dashboard %}
+    {% set progress_percent = (item.answered / item.total * 100) if item.total else 0 %}
     <a class="topic-dashboard-item" href="{{ url_for('topic_page', topic_slug=item.slug) }}">
-      <div class="topic-dashboard-name">{{ item.topic }}</div>
-      <div class="topic-dashboard-summary">Answered {{ item.answered }} / {{ item.total }}</div>
+      <div class="topic-dashboard-card-top">
+        <div>
+          <div class="topic-dashboard-name">{{ item.topic }}</div>
+          <div class="topic-dashboard-summary">Answered {{ item.answered }} / {{ item.total }}</div>
+        </div>
+        <span class="topic-dashboard-arrow">Enter &rarr;</span>
+      </div>
+      <div class="topic-progress-track" aria-hidden="true">
+        <span class="topic-progress-fill" style="width: {{ '%.1f' % progress_percent }}%;"></span>
+      </div>
       <div class="topic-dashboard-stats">
         <span>Correct {{ item.correct_total }}</span>
         <span>Wrong {{ item.wrong_total }}</span>

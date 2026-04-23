@@ -10,124 +10,130 @@
 {% endblock %}
 
 {% block content %}
-<div class="practice-layout">
-  <div class="practice-topbar">
-    <a class="back-link" href="{{ back_to_topic_url }}">&larr; Back to {{ topic_name }}</a>
-    <div class="practice-topbar-right">
-      <div id="practice-timers" class="practice-timers" data-countdown-seconds="{{ question_countdown_seconds }}">
-        <div class="timer-block">
-          <span class="timer-label">Time spent</span>
-          <span id="elapsed-timer" class="timer" aria-live="polite">00:00</span>
-        </div>
-        <div class="timer-block">
-          <span class="timer-label">Time left</span>
-          <span id="countdown-timer" class="timer" aria-live="polite">05:00</span>
-        </div>
-      </div>
-      <span class="practice-status">Current record: {{ problem.status_text }}</span>
-    </div>
-  </div>
-
-  <div class="practice-main">
-    <div class="practice-primary">
-      <!-- Problem info bar -->
-      <div class="problem-bar">
-        <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
-          {% if problem.category and problem.category != 'Uncategorized' %}
-            <span class="problem-cat-badge">{{ problem.category }}</span>
-          {% endif %}
-        </span>
-        <div class="problem-bar-actions">
-          <button type="button" id="ai-toggle" class="btn btn-small btn-ai" title="Show or hide the AI tutor">
-            Hide AI
-          </button>
-          <a href="{{ problem.problem_url }}" target="_blank" class="btn btn-small btn-outline">
-            Open on AoPS &nearr;
-          </a>
-        </div>
-      </div>
-
-      <!-- Embedded problem page -->
-      <div class="problem-frame-wrap">
-        <iframe
-          src="{{ problem.problem_url }}"
-          class="problem-frame"
-          sandbox="allow-same-origin allow-scripts"
-          loading="lazy"
-        ></iframe>
-        <div class="frame-fallback">
-          Can't see the problem?
-          <a href="{{ problem.problem_url }}" target="_blank">Open it directly on AoPS</a>
-        </div>
-      </div>
-
-      <!-- Answer section -->
-      <div class="answer-section">
-        <form id="answer-form" action="{{ url_for('submit_question_answer', problem_id=problem.problem_id) }}" method="post">
-          <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
-          <input type="hidden" name="difficulty" value="{{ selected_difficulty }}">
-          <p class="answer-prompt">Your answer:</p>
-          <div class="answer-buttons">
-            {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
-            <a
-              href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty, selected=letter) }}"
-              class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
-            >{{ letter }}</a>
-            {% endfor %}
+<div class="practice-shell">
+  <div class="practice-layout">
+    <div class="practice-topbar">
+      <a class="back-link" href="{{ back_to_topic_url }}">&larr; Back to {{ topic_name }}</a>
+      <div class="practice-topbar-right">
+        <div class="timer-shell">
+          <div id="practice-timers" class="practice-timers" data-countdown-seconds="{{ question_countdown_seconds }}">
+            <div class="timer-block">
+              <span class="timer-label">Time spent</span>
+              <span id="elapsed-timer" class="timer" aria-live="polite">00:00</span>
+            </div>
+            <div class="timer-block">
+              <span class="timer-label">Time left</span>
+              <span id="countdown-timer" class="timer" aria-live="polite">05:00</span>
+            </div>
           </div>
-          <div class="submit-row" id="submit-row"{% if not selected_choice %} style="display:none;"{% endif %}>
-            <span id="selected-label" class="selected-label" aria-live="polite">Selected: {{ selected_choice or 'none' }}</span>
-            <button type="submit" class="btn btn-primary" id="submit-btn">
-              Submit &rarr;
+        </div>
+        <span class="practice-status">Current record: {{ problem.status_text }}</span>
+      </div>
+    </div>
+
+    <div class="practice-main">
+      <div class="practice-primary">
+        <!-- Problem info bar -->
+        <div class="problem-bar">
+          <span class="problem-label">{{ problem.contest_label }} &mdash; Problem {{ problem.problem_num }}
+            {% if problem.category and problem.category != 'Uncategorized' %}
+              <span class="problem-cat-badge">{{ problem.category }}</span>
+            {% endif %}
+          </span>
+          <div class="problem-bar-actions">
+            <button type="button" id="ai-toggle" class="btn btn-small btn-ai" title="Show or hide the AI tutor">
+              Hide AI
             </button>
-            <a class="btn btn-skip" href="{{ back_to_topic_url }}">Back to list</a>
+            <a href="{{ problem.problem_url }}" target="_blank" class="btn btn-small btn-outline">
+              Open on AoPS &nearr;
+            </a>
           </div>
-        </form>
-        <div id="timer-expired-message" class="timer-expired-message" hidden>
-          Time is up for this question. Return to the list to reopen it and try again.
         </div>
 
-        <div class="solution-reveal">
-          <details>
-            <summary>Show solution link</summary>
-            <a href="{{ solution_url }}" target="_blank">View solution on AoPS &nearr;</a>
-          </details>
+        <!-- Embedded problem page -->
+        <div class="problem-frame-wrap">
+          <iframe
+            src="{{ problem.problem_url }}"
+            class="problem-frame"
+            sandbox="allow-same-origin allow-scripts"
+            loading="lazy"
+          ></iframe>
+          <div class="frame-fallback">
+            Can't see the problem?
+            <a href="{{ problem.problem_url }}" target="_blank">Open it directly on AoPS</a>
+          </div>
+        </div>
+
+        <!-- Answer section -->
+        <div class="answer-section">
+          <form id="answer-form" action="{{ url_for('submit_question_answer', problem_id=problem.problem_id) }}" method="post">
+            <input type="hidden" id="choice-input" name="choice" value="{{ selected_choice }}">
+            <input type="hidden" name="difficulty" value="{{ selected_difficulty }}">
+            <div class="answer-command-center">
+              <p class="answer-prompt">Your answer:</p>
+              <div class="answer-buttons">
+                {% for letter in ['A', 'B', 'C', 'D', 'E'] %}
+                <a
+                  href="{{ url_for('question_page', problem_id=problem.problem_id, difficulty=selected_difficulty, selected=letter) }}"
+                  class="btn btn-answer{% if selected_choice == letter %} btn-answer-selected{% endif %}"
+                >{{ letter }}</a>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="submit-row" id="submit-row"{% if not selected_choice %} style="display:none;"{% endif %}>
+              <span id="selected-label" class="selected-label" aria-live="polite">Selected: {{ selected_choice or 'none' }}</span>
+              <button type="submit" class="btn btn-primary" id="submit-btn">
+                Submit &rarr;
+              </button>
+              <a class="btn btn-skip" href="{{ back_to_topic_url }}">Back to list</a>
+            </div>
+          </form>
+          <div id="timer-expired-message" class="timer-expired-message" hidden>
+            Time is up for this question. Return to the list to reopen it and try again.
+          </div>
+
+          <div class="solution-reveal">
+            <details>
+              <summary>Show solution link</summary>
+              <a href="{{ solution_url }}" target="_blank">View solution on AoPS &nearr;</a>
+            </details>
+          </div>
         </div>
       </div>
+
+      <!-- AI Chat Panel on the right -->
+      <aside id="practice-sidebar" class="practice-sidebar">
+        <div id="ai-panel" class="ai-panel">
+          <div class="ai-panel-header">
+            <span>AI Tutor</span>
+            <button type="button" id="ai-close" class="ai-close" title="Hide AI tutor">&times;</button>
+          </div>
+          <div class="ai-mode-row">
+            <label for="ai-mode" class="ai-mode-label">Tutor mode</label>
+            <select id="ai-mode" class="ai-mode-select">
+              {% for mode_key, mode_config in ai_tutor_modes.items() %}
+              <option
+                value="{{ mode_key }}"
+                data-intro="{{ mode_config.intro }}"
+                data-placeholder="{{ mode_config.placeholder }}"
+                {% if mode_key == default_ai_tutor_mode %}selected{% endif %}
+              >
+                {{ mode_config.label }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="ai-mode-intro" class="ai-mode-intro">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
+          <div id="ai-messages" class="ai-messages">
+            <div class="ai-msg ai-msg-bot">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
+          </div>
+          <div class="ai-input-row">
+            <input type="text" id="ai-input" class="ai-input" placeholder="{{ ai_tutor_modes[default_ai_tutor_mode].placeholder }}" autocomplete="off">
+            <button type="button" id="ai-send" class="btn btn-primary btn-small">Send</button>
+          </div>
+        </div>
+      </aside>
     </div>
-
-    <!-- AI Chat Panel on the right -->
-    <aside id="practice-sidebar" class="practice-sidebar">
-      <div id="ai-panel" class="ai-panel">
-        <div class="ai-panel-header">
-          <span>AI Tutor</span>
-          <button type="button" id="ai-close" class="ai-close" title="Hide AI tutor">&times;</button>
-        </div>
-        <div class="ai-mode-row">
-          <label for="ai-mode" class="ai-mode-label">Tutor mode</label>
-          <select id="ai-mode" class="ai-mode-select">
-            {% for mode_key, mode_config in ai_tutor_modes.items() %}
-            <option
-              value="{{ mode_key }}"
-              data-intro="{{ mode_config.intro }}"
-              data-placeholder="{{ mode_config.placeholder }}"
-              {% if mode_key == default_ai_tutor_mode %}selected{% endif %}
-            >
-              {{ mode_config.label }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div id="ai-mode-intro" class="ai-mode-intro">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
-        <div id="ai-messages" class="ai-messages">
-          <div class="ai-msg ai-msg-bot">{{ ai_tutor_modes[default_ai_tutor_mode].intro }}</div>
-        </div>
-        <div class="ai-input-row">
-          <input type="text" id="ai-input" class="ai-input" placeholder="{{ ai_tutor_modes[default_ai_tutor_mode].placeholder }}" autocomplete="off">
-          <button type="button" id="ai-send" class="btn btn-primary btn-small">Send</button>
-        </div>
-      </div>
-    </aside>
   </div>
 </div>
 

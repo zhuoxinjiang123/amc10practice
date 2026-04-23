@@ -7,6 +7,8 @@
 {% endblock %}
 
 {% block content %}
+{% set topic_progress_percent = (topic_summary.answered / topic_summary.total * 100) if topic_summary.total else 0 %}
+<div class="topic-shell">
 <div class="card topic-card">
   <div class="topic-hero">
     <div>
@@ -30,20 +32,29 @@
     </div>
   </div>
 
-  <div class="difficulty-tabs" role="tablist" aria-label="Difficulty filters">
-    {% for option in difficulty_options %}
-    <a
-      href="{{ url_for('topic_page', topic_slug=topic_summary.slug, difficulty=option.value) }}"
-      class="difficulty-chip{% if selected_difficulty == option.value %} difficulty-chip-active{% endif %}"
-    >
-      {{ option.label }}
-    </a>
-    {% endfor %}
+  <div class="topic-progress-panel">
+    <div class="topic-progress-track topic-progress-track-large" aria-hidden="true">
+      <span class="topic-progress-fill" style="width: {{ '%.1f' % topic_progress_percent }}%;"></span>
+    </div>
+    <span>{{ '%.1f' % topic_progress_percent }}% practiced</span>
   </div>
 
-  <div class="topic-list-meta">
-    <span>{{ problems|length }} questions shown</span>
-    <a class="back-link" href="{{ url_for('index') }}">&larr; Back to topics</a>
+  <div class="topic-command-bar">
+    <div class="difficulty-tabs" role="tablist" aria-label="Difficulty filters">
+      {% for option in difficulty_options %}
+      <a
+        href="{{ url_for('topic_page', topic_slug=topic_summary.slug, difficulty=option.value) }}"
+        class="difficulty-chip{% if selected_difficulty == option.value %} difficulty-chip-active{% endif %}"
+      >
+        {{ option.label }}
+      </a>
+      {% endfor %}
+    </div>
+
+    <div class="topic-list-meta">
+      <span>{{ problems|length }} questions shown</span>
+      <a class="back-link" href="{{ url_for('index') }}">&larr; Back to topics</a>
+    </div>
   </div>
 
   <div class="question-list">
@@ -55,7 +66,10 @@
       <span class="question-marker">{{ problem.status_marker }}</span>
       <div class="question-row-main">
         <div class="question-title">{{ problem.contest_label }} - Problem {{ problem.problem_num }}</div>
-        <div class="question-status">{{ problem.status_text }}</div>
+        <div class="question-row-meta">
+          <span class="question-status-pill{% if problem.answered %} question-status-pill-done{% endif %}">{{ problem.status_text }}</span>
+          <span class="question-difficulty-note">Problem {{ problem.problem_num }}</span>
+        </div>
       </div>
       <span class="question-action">Practice &rarr;</span>
     </a>
@@ -63,5 +77,6 @@
     <div class="topic-empty">No questions match this difficulty filter yet.</div>
     {% endfor %}
   </div>
+</div>
 </div>
 {% endblock %}

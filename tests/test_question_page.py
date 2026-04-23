@@ -56,6 +56,15 @@ class QuestionPageTests(unittest.TestCase):
         self.assertIn("Time spent", html)
         self.assertIn("Time left", html)
 
+    def test_question_page_renders_learning_cockpit_design_hooks(self):
+        response = self.client.get(f"/question/{self.problem['problem_id']}?difficulty=all")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="practice-shell"', html)
+        self.assertIn('class="timer-shell"', html)
+        self.assertIn('class="answer-command-center"', html)
+
 
 if __name__ == "__main__":
     unittest.main()
